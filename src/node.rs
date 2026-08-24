@@ -8,6 +8,17 @@ pub enum Node {
     /// Text display component.
     Text {
         text: String,
+        size: Option<f32>,
+        bold: bool,
+    },
+    TextInput {
+        text: String,
+        on_change: Box<dyn FnMut(String) + 'static>,
+    },
+    Checkbox {
+        checked: bool,
+        label: String,
+        on_change: Box<dyn FnMut(bool) + 'static>,
     },
     /// Interactive button component with a click callback.
     Button {
@@ -33,6 +44,37 @@ impl Node {
     pub fn text(text: impl Into<String>) -> Self {
         Node::Text {
             text: text.into(),
+            size: None,
+            bold: false,
+        }
+    }
+
+    pub fn text_styled(text: impl Into<String>, size: Option<f32>, bold: bool) -> Self {
+        Node::Text {
+            text: text.into(),
+            size,
+            bold,
+        }
+    }
+
+    pub fn text_input<F>(text: impl Into<String>, on_change: F) -> Self
+    where
+        F: FnMut(String) + 'static,
+    {
+        Node::TextInput {
+            text: text.into(),
+            on_change: Box::new(on_change),
+        }
+    }
+
+    pub fn checkbox<F>(checked: bool, label: impl Into<String>, on_change: F) -> Self
+    where
+        F: FnMut(bool) + 'static,
+    {
+        Node::Checkbox {
+            checked,
+            label: label.into(),
+            on_change: Box::new(on_change),
         }
     }
 
@@ -92,7 +134,7 @@ impl Node {
     /// Returns the text content if this is a `Text` node.
     pub fn as_text(&self) -> Option<&str> {
         match self {
-            Node::Text { text } => Some(text.as_str()),
+            Node::Text { text, .. } => Some(text.as_str()),
             _ => None,
         }
     }
@@ -147,8 +189,27 @@ impl Node {
     /// Traverse the node tree and render components into the provided `egui::Ui`.
     pub fn render(&mut self, ui: &mut egui::Ui) {
         match self {
-            Node::Text { text } => {
-                ui.label(text.as_str());
+            Node::Text { text, size, bold } => {
+                let mut rt = egui::RichText::new(text.as_str());
+                if let Some(s) = size {
+                    rt = rt.size(*s);
+                }
+                if *bold {
+                    rt = rt.strong();
+                }
+                ui.label(rt);
+            }
+            Node::TextInput { text, on_change } => {
+                let mut current_text = text.clone();
+                if ui.text_edit_singleline(&mut current_text).changed() {
+                    (on_change)(current_text);
+                }
+            }
+            Node::Checkbox { checked, label, on_change } => {
+                let mut current = *checked;
+                if ui.checkbox(&mut current, label.as_str()).changed() {
+                    (on_change)(current);
+                }
             }
             Node::Button { label, on_click } => {
                 if ui.button(label.as_str()).clicked() {
@@ -189,7 +250,9 @@ impl Default for Node {
 impl std::fmt::Debug for Node {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
-            Node::Text { text } => f.debug_struct("Text").field("text", text).finish(),
+            Node::Text { text, .. } => f.debug_struct("Text").field("text", text).finish(),
+            Node::TextInput { text, .. } => f.debug_struct("TextInput").field("text", text).finish(),
+            Node::Checkbox { label, checked, .. } => f.debug_struct("Checkbox").field("label", label).field("checked", checked).finish(),
             Node::Button { label, .. } => f
                 .debug_struct("Button")
                 .field("label", label)
