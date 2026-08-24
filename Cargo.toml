@@ -2,5 +2,9 @@
 name = "topia"
 version = "0.1.0"
 edition = "2024"
+description = "Declarative native desktop UI framework for the f(x) programming language"
+license = "MIT OR Apache-2.0"
 
 [dependencies]
+eframe = "0.36.1"
+egui = "0.36.1"
