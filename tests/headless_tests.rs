@@ -28,7 +28,7 @@ fn test_node_constructors_and_tree_nesting() {
         assert_eq!(children.len(), 3);
         assert_eq!(*spacing, Some(12.0));
 
-        if let Node::Text { text } = &children[0] {
+        if let Node::Text { text, .. } = &children[0] {
             assert_eq!(text, "Counter App");
         } else {
             panic!("Expected Text node");
