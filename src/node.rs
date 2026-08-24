@@ -37,6 +37,17 @@ pub enum Node {
     },
     /// Empty placeholder node that produces no visual output.
     Empty,
+    /// A slider for numeric values.
+    Slider {
+        value: f32,
+        min: f32,
+        max: f32,
+        on_change: Box<dyn FnMut(f32) + 'static>,
+    },
+    /// A scrollable area containing children.
+    ScrollArea {
+        children: Vec<Node>,
+    },
 }
 
 impl Node {
@@ -124,6 +135,22 @@ impl Node {
     /// Creates an `Empty` node.
     pub fn empty() -> Self {
         Node::Empty
+    }
+
+    pub fn slider<F>(value: f32, min: f32, max: f32, on_change: F) -> Self
+    where
+        F: FnMut(f32) + 'static,
+    {
+        Node::Slider {
+            value,
+            min,
+            max,
+            on_change: Box::new(on_change),
+        }
+    }
+
+    pub fn scroll_area(children: Vec<Node>) -> Self {
+        Node::ScrollArea { children }
     }
 
     /// Returns `true` if this is an `Empty` node.
@@ -237,6 +264,19 @@ impl Node {
                 });
             }
             Node::Empty => {}
+            Node::Slider { value, min, max, on_change } => {
+                let mut current = *value;
+                if ui.add(egui::Slider::new(&mut current, *min..=*max)).changed() {
+                    (on_change)(current);
+                }
+            }
+            Node::ScrollArea { children } => {
+                egui::ScrollArea::vertical().show(ui, |ui| {
+                    for child in children {
+                        child.render(ui);
+                    }
+                });
+            }
         }
     }
 }
@@ -269,6 +309,8 @@ impl std::fmt::Debug for Node {
                 .field("spacing", spacing)
                 .finish(),
             Node::Empty => write!(f, "Empty"),
+            Node::Slider { value, min, max, .. } => f.debug_struct("Slider").field("value", value).field("min", min).field("max", max).finish(),
+            Node::ScrollArea { children } => f.debug_struct("ScrollArea").field("children", children).finish(),
         }
     }
 }
