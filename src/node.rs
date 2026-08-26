@@ -21,7 +21,10 @@ pub enum Node {
     Stepper { value: f32, step: f32, on_change: Box<dyn FnMut(f32) + 'static> },
     ColorWell { color: [u8; 4], on_change: Box<dyn FnMut([u8; 4]) + 'static> },
     ComboBox { selected: String, options: Vec<String>, on_change: Box<dyn FnMut(String) + 'static> },
-    SegmentedControl { selected: usize, segments: Vec<String>, on_change: Box<dyn FnMut(usize) + 'static> }
+    SegmentedControl { selected: usize, segments: Vec<String>, on_change: Box<dyn FnMut(usize) + 'static> },
+    GroupBox { title: String, child: Box<Node> },
+    DisclosureGroup { title: String, child: Box<Node> },
+    TabView { tabs: Vec<(String, Node)>, selected: usize, on_change: Box<dyn FnMut(usize) + 'static> }
 }
 
 impl Node {
@@ -36,6 +39,9 @@ impl Node {
     pub fn color_well<F: FnMut([u8; 4]) + 'static>(color: [u8; 4], on_change: F) -> Self { Node::ColorWell { color, on_change: Box::new(on_change) } }
     pub fn combo_box<S: Into<String>, F: FnMut(String) + 'static>(selected: S, options: Vec<String>, on_change: F) -> Self { Node::ComboBox { selected: selected.into(), options, on_change: Box::new(on_change) } }
     pub fn segmented_control<F: FnMut(usize) + 'static>(selected: usize, segments: Vec<String>, on_change: F) -> Self { Node::SegmentedControl { selected, segments, on_change: Box::new(on_change) } }
+    pub fn group_box<S: Into<String>>(title: S, child: Node) -> Self { Node::GroupBox { title: title.into(), child: Box::new(child) } }
+    pub fn disclosure_group<S: Into<String>>(title: S, child: Node) -> Self { Node::DisclosureGroup { title: title.into(), child: Box::new(child) } }
+    pub fn tab_view<F: FnMut(usize) + 'static>(tabs: Vec<(String, Node)>, selected: usize, on_change: F) -> Self { Node::TabView { tabs, selected, on_change: Box::new(on_change) } }
 
     pub fn vstack(children: Vec<Node>) -> Self { Node::VStack { children, spacing: None } }
     pub fn hstack(children: Vec<Node>) -> Self { Node::HStack { children, spacing: None } }
@@ -183,6 +189,37 @@ impl Node {
                     }
                 });
             }
+            Node::GroupBox { title, child } => {
+                ui.group(|ui| {
+                    ui.label(egui::RichText::new(title.as_str()).strong());
+                    ui.separator();
+                    child.render(ui);
+                });
+            }
+            Node::DisclosureGroup { title, child } => {
+                egui::CollapsingHeader::new(title.as_str()).show(ui, |ui| {
+                    child.render(ui);
+                });
+            }
+            Node::TabView { tabs, selected, on_change } => {
+                ui.vertical(|ui| {
+                    ui.horizontal(|ui| {
+                        let mut current = *selected;
+                        for (i, (title, _)) in tabs.iter().enumerate() {
+                            if ui.selectable_label(current == i, title).clicked() {
+                                if current != i {
+                                    current = i;
+                                    (on_change)(current);
+                                }
+                            }
+                        }
+                    });
+                    ui.separator();
+                    if let Some((_, child)) = tabs.get_mut(*selected) {
+                        child.render(ui);
+                    }
+                });
+            }
             Node::Graph { points, min_x, max_x, min_y, max_y } => {
                 let (response, painter) = ui.allocate_painter(egui::vec2(ui.available_width(), 300.0), egui::Sense::hover());
                 let rect = response.rect;
@@ -237,6 +274,9 @@ impl std::fmt::Debug for Node {
             Node::ColorWell { color, .. } => f.debug_struct("ColorWell").field("color", color).finish(),
             Node::ComboBox { selected, options, .. } => f.debug_struct("ComboBox").field("selected", selected).field("options", options).finish(),
             Node::SegmentedControl { selected, segments, .. } => f.debug_struct("SegmentedControl").field("selected", selected).field("segments", segments).finish(),
+            Node::GroupBox { title, child } => f.debug_struct("GroupBox").field("title", title).field("child", child).finish(),
+            Node::DisclosureGroup { title, child } => f.debug_struct("DisclosureGroup").field("title", title).field("child", child).finish(),
+            Node::TabView { tabs, selected, .. } => f.debug_struct("TabView").field("tabs_len", &tabs.len()).field("selected", selected).finish(),
             Node::Graph { points, min_x, max_x, min_y, max_y } => f.debug_struct("Graph")
                 .field("points_len", &points.len())
                 .field("min_x", min_x).field("max_x", max_x)
