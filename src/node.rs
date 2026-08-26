@@ -17,6 +17,11 @@ pub enum Node {
     Graph { points: Vec<(f32, f32)>, min_x: f32, max_x: f32, min_y: f32, max_y: f32 },
     Separator,
     ProgressBar { progress: f32 },
+    Toggle { checked: bool, on_change: Box<dyn FnMut(bool) + 'static> },
+    Stepper { value: f32, step: f32, on_change: Box<dyn FnMut(f32) + 'static> },
+    ColorWell { color: [u8; 4], on_change: Box<dyn FnMut([u8; 4]) + 'static> },
+    ComboBox { selected: String, options: Vec<String>, on_change: Box<dyn FnMut(String) + 'static> },
+    SegmentedControl { selected: usize, segments: Vec<String>, on_change: Box<dyn FnMut(usize) + 'static> }
 }
 
 impl Node {
@@ -26,6 +31,12 @@ impl Node {
     pub fn empty() -> Self { Node::Empty }
     pub fn separator() -> Self { Node::Separator }
     pub fn progress_bar(progress: f32) -> Self { Node::ProgressBar { progress } }
+    pub fn toggle<F: FnMut(bool) + 'static>(checked: bool, on_change: F) -> Self { Node::Toggle { checked, on_change: Box::new(on_change) } }
+    pub fn stepper<F: FnMut(f32) + 'static>(value: f32, step: f32, on_change: F) -> Self { Node::Stepper { value, step, on_change: Box::new(on_change) } }
+    pub fn color_well<F: FnMut([u8; 4]) + 'static>(color: [u8; 4], on_change: F) -> Self { Node::ColorWell { color, on_change: Box::new(on_change) } }
+    pub fn combo_box<S: Into<String>, F: FnMut(String) + 'static>(selected: S, options: Vec<String>, on_change: F) -> Self { Node::ComboBox { selected: selected.into(), options, on_change: Box::new(on_change) } }
+    pub fn segmented_control<F: FnMut(usize) + 'static>(selected: usize, segments: Vec<String>, on_change: F) -> Self { Node::SegmentedControl { selected, segments, on_change: Box::new(on_change) } }
+
     pub fn vstack(children: Vec<Node>) -> Self { Node::VStack { children, spacing: None } }
     pub fn hstack(children: Vec<Node>) -> Self { Node::HStack { children, spacing: None } }
     
@@ -133,6 +144,45 @@ impl Node {
             Node::ProgressBar { progress } => {
                 ui.add(egui::ProgressBar::new(*progress));
             }
+            Node::Toggle { checked, on_change } => {
+                let mut current = *checked;
+                // egui 0.36 has a toggle switch we can build using a selectable label or a custom widget, but let's try just a Checkbox for now or a custom toggle
+                if ui.selectable_label(current, if current { "On" } else { "Off" }).clicked() {
+                    (on_change)(!current);
+                }
+            }
+            Node::Stepper { value, step, on_change } => {
+                let mut current = *value as f64;
+                if ui.add(egui::widgets::DragValue::new(&mut current).speed(*step as f64)).changed() {
+                    (on_change)(current as f32);
+                }
+            }
+            Node::ColorWell { color, on_change } => {
+                let mut c = egui::Color32::from_rgba_premultiplied(color[0], color[1], color[2], color[3]);
+                if ui.color_edit_button_srgba(&mut c).changed() {
+                    (on_change)(c.to_array());
+                }
+            }
+            Node::ComboBox { selected, options, on_change } => {
+                let mut current = selected.clone();
+                egui::ComboBox::from_id_salt(options.len()).selected_text(current.as_str()).show_ui(ui, |ui| {
+                    for option in options {
+                        if ui.selectable_value(&mut current, option.clone(), option.clone()).changed() {
+                            (on_change)(current.clone());
+                        }
+                    }
+                });
+            }
+            Node::SegmentedControl { selected, segments, on_change } => {
+                ui.horizontal(|ui| {
+                    let mut current = *selected;
+                    for (i, segment) in segments.iter().enumerate() {
+                        if ui.selectable_value(&mut current, i, segment.as_str()).changed() {
+                            (on_change)(current);
+                        }
+                    }
+                });
+            }
             Node::Graph { points, min_x, max_x, min_y, max_y } => {
                 let (response, painter) = ui.allocate_painter(egui::vec2(ui.available_width(), 300.0), egui::Sense::hover());
                 let rect = response.rect;
@@ -182,6 +232,11 @@ impl std::fmt::Debug for Node {
             Node::ScrollArea { children } => f.debug_struct("ScrollArea").field("children", children).finish(),
             Node::Separator => write!(f, "Separator"),
             Node::ProgressBar { progress } => f.debug_struct("ProgressBar").field("progress", progress).finish(),
+            Node::Toggle { checked, .. } => f.debug_struct("Toggle").field("checked", checked).finish(),
+            Node::Stepper { value, step, .. } => f.debug_struct("Stepper").field("value", value).field("step", step).finish(),
+            Node::ColorWell { color, .. } => f.debug_struct("ColorWell").field("color", color).finish(),
+            Node::ComboBox { selected, options, .. } => f.debug_struct("ComboBox").field("selected", selected).field("options", options).finish(),
+            Node::SegmentedControl { selected, segments, .. } => f.debug_struct("SegmentedControl").field("selected", selected).field("segments", segments).finish(),
             Node::Graph { points, min_x, max_x, min_y, max_y } => f.debug_struct("Graph")
                 .field("points_len", &points.len())
                 .field("min_x", min_x).field("max_x", max_x)
