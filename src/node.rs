@@ -24,7 +24,9 @@ pub enum Node {
     SegmentedControl { selected: usize, segments: Vec<String>, on_change: Box<dyn FnMut(usize) + 'static> },
     GroupBox { title: String, child: Box<Node> },
     DisclosureGroup { title: String, child: Box<Node> },
-    TabView { tabs: Vec<(String, Node)>, selected: usize, on_change: Box<dyn FnMut(usize) + 'static> }
+    TabView { tabs: Vec<(String, Node)>, selected: usize, on_change: Box<dyn FnMut(usize) + 'static> },
+    MenuButton { title: String, items: Vec<String>, on_select: Box<dyn FnMut(String) + 'static> },
+    MenuBar { menus: Vec<(String, Vec<String>)>, on_select: Box<dyn FnMut(String, String) + 'static> }
 }
 
 impl Node {
@@ -42,6 +44,8 @@ impl Node {
     pub fn group_box<S: Into<String>>(title: S, child: Node) -> Self { Node::GroupBox { title: title.into(), child: Box::new(child) } }
     pub fn disclosure_group<S: Into<String>>(title: S, child: Node) -> Self { Node::DisclosureGroup { title: title.into(), child: Box::new(child) } }
     pub fn tab_view<F: FnMut(usize) + 'static>(tabs: Vec<(String, Node)>, selected: usize, on_change: F) -> Self { Node::TabView { tabs, selected, on_change: Box::new(on_change) } }
+    pub fn menu_button<S: Into<String>, F: FnMut(String) + 'static>(title: S, items: Vec<String>, on_select: F) -> Self { Node::MenuButton { title: title.into(), items, on_select: Box::new(on_select) } }
+    pub fn menu_bar<F: FnMut(String, String) + 'static>(menus: Vec<(String, Vec<String>)>, on_select: F) -> Self { Node::MenuBar { menus, on_select: Box::new(on_select) } }
 
     pub fn vstack(children: Vec<Node>) -> Self { Node::VStack { children, spacing: None } }
     pub fn hstack(children: Vec<Node>) -> Self { Node::HStack { children, spacing: None } }
@@ -220,6 +224,30 @@ impl Node {
                     }
                 });
             }
+            Node::MenuButton { title, items, on_select } => {
+                ui.menu_button(title.as_str(), |ui| {
+                    for item in items {
+                        if ui.button(item.as_str()).clicked() {
+                            (on_select)(item.clone());
+                            ui.close();
+                        }
+                    }
+                });
+            }
+            Node::MenuBar { menus, on_select } => {
+                ui.horizontal(|ui| {
+                    for (menu_title, items) in menus {
+                        ui.menu_button(menu_title.as_str(), |ui| {
+                            for item in items {
+                                if ui.button(item.as_str()).clicked() {
+                                    (on_select)(menu_title.clone(), item.clone());
+                                    ui.close();
+                                }
+                            }
+                        });
+                    }
+                });
+            }
             Node::Graph { points, min_x, max_x, min_y, max_y } => {
                 let (response, painter) = ui.allocate_painter(egui::vec2(ui.available_width(), 300.0), egui::Sense::hover());
                 let rect = response.rect;
@@ -277,6 +305,8 @@ impl std::fmt::Debug for Node {
             Node::GroupBox { title, child } => f.debug_struct("GroupBox").field("title", title).field("child", child).finish(),
             Node::DisclosureGroup { title, child } => f.debug_struct("DisclosureGroup").field("title", title).field("child", child).finish(),
             Node::TabView { tabs, selected, .. } => f.debug_struct("TabView").field("tabs_len", &tabs.len()).field("selected", selected).finish(),
+            Node::MenuButton { title, items, .. } => f.debug_struct("MenuButton").field("title", title).field("items", items).finish(),
+            Node::MenuBar { menus, .. } => f.debug_struct("MenuBar").field("menus_len", &menus.len()).finish(),
             Node::Graph { points, min_x, max_x, min_y, max_y } => f.debug_struct("Graph")
                 .field("points_len", &points.len())
                 .field("min_x", min_x).field("max_x", max_x)
