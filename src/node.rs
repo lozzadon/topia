@@ -20,15 +20,25 @@ pub enum Node {
 }
 
 impl Node {
-    pub fn text(t: &str) -> Self { Node::Text { text: t.to_string(), size: None, bold: false } }
-    pub fn button<F: FnMut() + 'static>(label: &str, cb: F) -> Self { Node::Button { label: label.to_string(), on_click: Box::new(cb) } }
+    pub fn text<S: Into<String>>(t: S) -> Self { Node::Text { text: t.into(), size: None, bold: false } }
+    pub fn text_styled<S: Into<String>>(t: S, size: Option<f32>, bold: bool) -> Self { Node::Text { text: t.into(), size, bold } }
+    pub fn button<S: Into<String>, F: FnMut() + 'static>(label: S, cb: F) -> Self { Node::Button { label: label.into(), on_click: Box::new(cb) } }
     pub fn empty() -> Self { Node::Empty }
     pub fn separator() -> Self { Node::Separator }
     pub fn progress_bar(progress: f32) -> Self { Node::ProgressBar { progress } }
     pub fn vstack(children: Vec<Node>) -> Self { Node::VStack { children, spacing: None } }
     pub fn hstack(children: Vec<Node>) -> Self { Node::HStack { children, spacing: None } }
+    
+    pub fn text_input<S: Into<String>, F: FnMut(String) + 'static>(text: S, on_change: F) -> Self { Node::TextInput { text: text.into(), on_change: Box::new(on_change) } }
+    pub fn checkbox<S: Into<String>, F: FnMut(bool) + 'static>(checked: bool, label: S, on_change: F) -> Self { Node::Checkbox { checked, label: label.into(), on_change: Box::new(on_change) } }
+    pub fn vstack_with_spacing(children: Vec<Node>, spacing: f32) -> Self { Node::VStack { children, spacing: Some(spacing) } }
     pub fn hstack_with_spacing(children: Vec<Node>, spacing: f32) -> Self { Node::HStack { children, spacing: Some(spacing) } }
     pub fn center(child: Node) -> Self { Node::Center { child: Box::new(child) } }
+    pub fn slider<F: FnMut(f32) + 'static>(value: f32, min: f32, max: f32, on_change: F) -> Self { Node::Slider { value, min, max, on_change: Box::new(on_change) } }
+    pub fn scroll_area(children: Vec<Node>) -> Self { Node::ScrollArea { children } }
+    pub fn graph(points: Vec<(f32, f32)>, min_x: f32, max_x: f32, min_y: f32, max_y: f32) -> Self { Node::Graph { points, min_x, max_x, min_y, max_y } }
+    pub fn scale(scale: f32, child: Node) -> Self { Node::Scale { scale, child: Box::new(child) } }
+
     
     pub fn text_content(&self) -> Option<&str> { if let Node::Text { text, .. } = self { Some(text) } else { None } }
     pub fn as_text(&self) -> Option<&str> { self.text_content() }
